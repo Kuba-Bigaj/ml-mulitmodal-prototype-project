@@ -18,7 +18,7 @@ class ClassEmbeddingGenerator:
 
     def generate_class_embeddings(self, data_path: str) -> list[tuple[str, torch.Tensor]]:
         """
-        Generates class embeddings for each class directory in the given data path.
+        Generates class embeddings for each class directory in the given class_data path.
         :param data_path: Path to the root directory containing class subdirectories.
         :return: A list of tuples, each containing the class name and its corresponding embedding tensor.
         """
