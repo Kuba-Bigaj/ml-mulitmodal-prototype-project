@@ -1,6 +1,6 @@
 import torch, PIL
 
-from scripts.class_embedding_generator import ClassEmbeddingGenerator
+from scripts.old.class_embedding_generator import ClassEmbeddingGenerator
 
 
 class SampleClassifier:
