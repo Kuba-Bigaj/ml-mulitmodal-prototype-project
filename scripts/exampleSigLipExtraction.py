@@ -1,7 +1,4 @@
-import torch
 import torchvision
-import matplotlib.pyplot as plt
-import random
 import PIL.Image as Image
 import torch
 from transformers import AutoModel, AutoProcessor, SiglipVisionModel, SiglipVisionConfig
@@ -27,31 +24,69 @@ def get_image_embeddings() -> dict[int, torch.Tensor]:
         for j in range(1000):
             embeddings[1000*i + j] = outputs.pooler_output[j]
 
+    # for i in range(5000):
+    #     inputs = processor(images=images[i], return_tensors="pt").to(model.device)
+    #
+    #     with torch.no_grad():
+    #         outputs = model(**inputs)
+    #
+    #     embeddings[i] = outputs.pooler_output[0]
     return embeddings
 
 def get_training_prototypes() -> dict[int, int]:
-    embeddings = get_image_embeddings()
+    embeddings_dict = get_image_embeddings()
     print("Got embeddings...")
-    prototypes : dict[int, int] = {}
 
-    # for each image...
-    for img_num, embedding in embeddings.items():
-        if img_num % 100 == 0:
-            print(f"Processing image {img_num}...")
-        # ...if it doesn't have a prototype yet...
-        if img_num not in prototypes.keys():
-            # ...find the most similar image among the rest
-            best_fit = 0
-            for other_img_num, other_embedding in embeddings.items():
-                if other_img_num != img_num and other_img_num not in prototypes.keys():
-                    similarity = torch.cosine_similarity(embedding, other_embedding, dim=0)
-                    if similarity > best_fit:
-                        best_fit = similarity
-                        prototypes[img_num] = other_img_num
-                        prototypes[other_img_num] = img_num
-                        print("Done did something")
-    print("Assigned prototypes!")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # 1. Convert dict to a single Tensor [N, 768]
+    # We keep track of the keys to map back later
+    img_nums = list(embeddings_dict.keys())
+    # Ensure embeddings are on the same device and float32 for precision
+    features = torch.stack([embeddings_dict[k] for k in img_nums]).to(device)
+
+    # 2. Normalize the embeddings (Crucial for SigLIP)
+    # This turns cosine similarity into a simple dot product
+    features = torch.nn.functional.normalize(features, p=2, dim=1)
+
+    # 3. Calculate ALL similarities at once [N, N]
+    # sim_matrix[i, j] is the similarity between image i and image j
+    sim_matrix = torch.mm(features, features.t())
+
+    # 4. Mask the diagonal so an image doesn't pick itself
+    sim_matrix.fill_diagonal_(-1)
+
+    sim_matrix.cpu()
+
+    prototypes = {}
+    used_indices = set()
+
+    # 5. Greedy matching
+    for i in range(len(img_nums)):
+        if i in used_indices:
+            continue
+
+        # Get similarities for image 'i', ignoring already used images
+        row = sim_matrix[i].clone()
+        for used_idx in used_indices:
+            row[used_idx] = -1
+
+        # Find the best remaining match
+        best_match_idx = torch.argmax(row).item()
+
+        # Pair them up
+        img_a = img_nums[i]
+        img_b = img_nums[best_match_idx]
+
+        prototypes[img_a] = img_b
+        prototypes[img_b] = img_a
+
+        used_indices.add(i)
+        used_indices.add(best_match_idx)
+
     return prototypes
+
+
 
 def get_image_prototype(image : Image.Image) -> dict[int, int]:
     pass
@@ -63,6 +98,13 @@ def get_image_prototype(image : Image.Image) -> dict[int, int]:
 def main():
     prototypes = get_training_prototypes()
     print(prototypes)
+    dataset = torchvision.datasets.STL10(root='../data', split='train', download=True)
+
+    dataset[0][0].show()
+    dataset[3282][0].show()
+
+    dataset[1][0].show()
+    dataset[4343][0].show()
 
 
 if __name__ == '__main__':
