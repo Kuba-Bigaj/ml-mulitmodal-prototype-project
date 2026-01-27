@@ -79,7 +79,9 @@ def get_stl10_class_weights_learn_difficult() -> torch.Tensor:
     return weights
 
 def get_stl10_class_weights_learn_easy_inversion() -> torch.Tensor:
-    return 1 / get_stl10_class_weights_learn_difficult()
+    weights = 1 / get_stl10_class_weights_learn_difficult()
+    weights /= weights.mean()
+    return weights
 
 def get_stl10_class_weights_learn_easy_linear() -> torch.Tensor:
     wgts = get_stl10_class_weights_learn_difficult();
