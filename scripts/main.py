@@ -1,4 +1,7 @@
 import csv
+import datetime
+import time
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -244,15 +247,22 @@ def main(max_epochs: int, device: torch.device, weighting_scheme: str = "learn_d
     return results
 
 if __name__ == "__main__":
+    start = datetime.datetime.now()
+    print(f"Start: {start}")
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using: {device}")
+    epochs = 40
     results = {}
-    results["learn_hard"] = main(20, device, weighting_scheme="learn_hard")
-    results["learn_easy_inversion"] = main(20, device, weighting_scheme="learn_easy_inversion")
-    results["learn_easy_linear"] = main(20, device, weighting_scheme="learn_easy_linear")
-
-    # Save results to CSV
+    results["learn_hard"] = main(epochs, device, weighting_scheme="learn_hard")
     save_results_to_csv(results, 'results.csv')
-    print("Results saved to results.csv")
+    results["learn_easy_inversion"] = main(epochs, device, weighting_scheme="learn_easy_inversion")
+    save_results_to_csv(results, 'results.csv')
+    results["learn_easy_linear"] = main(epochs, device, weighting_scheme="learn_easy_linear")
+    save_results_to_csv(results, 'results.csv')
+
+    end = datetime.datetime.now()
+    print(f"End: {end}")
+    print(f"Elapsed: {(end - start).total_seconds() // 60} minutes")
 
 
