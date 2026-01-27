@@ -14,32 +14,32 @@ from torchvision.models import resnet18
 from scripts.img_proto import get_stl10_class_weights_learn_difficult, get_stl10_class_weights_learn_easy_linear, get_stl10_class_weights_learn_easy_inversion
 
 
-def save_results_to_csv(results_dict, csv_file_path):
+def save_results_to_csv(results, csv_file_path):
     """
     Save the output of main() function to a CSV file.
 
     Args:
-        results_dict: Dictionary with weighting schemes as keys and results lists as values.
-                     Each results list contains tuples of (diff_loss_by_class, diff_acc_by_class)
-                     for each of 10 folds.
+        results: List of results for each fold.
+                Each element is a tuple of (baseline_loss, baseline_acc, weighted_loss, weighted_acc)
+                where each is a list of 10 values (one per class).
         csv_file_path: Path to the output CSV file.
     """
     with open(csv_file_path, 'w', newline='') as csvfile:
-        fieldnames = ['weighting_scheme', 'fold', 'class_idx', 'diff_loss', 'diff_acc']
+        fieldnames = ['fold', 'class_idx', 'baseline_loss', 'baseline_acc', 'weighted_loss', 'weighted_acc']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
         writer.writeheader()
 
-        for weighting_scheme, results in results_dict.items():
-            for fold_idx, (diff_loss_by_class, diff_acc_by_class) in enumerate(results):
-                for class_idx in range(10):
-                    writer.writerow({
-                        'weighting_scheme': weighting_scheme,
-                        'fold': fold_idx,
-                        'class_idx': class_idx,
-                        'diff_loss': diff_loss_by_class[class_idx],
-                        'diff_acc': diff_acc_by_class[class_idx]
-                    })
+        for fold_idx, (baseline_loss_by_class, baseline_acc_by_class, weighted_loss_by_class, weighted_acc_by_class) in enumerate(results):
+            for class_idx in range(10):
+                writer.writerow({
+                    'fold': fold_idx,
+                    'class_idx': class_idx,
+                    'baseline_loss': baseline_loss_by_class[class_idx],
+                    'baseline_acc': baseline_acc_by_class[class_idx],
+                    'weighted_loss': weighted_loss_by_class[class_idx],
+                    'weighted_acc': weighted_acc_by_class[class_idx]
+                })
 
 
 def get_modified_resnet():
@@ -226,24 +226,14 @@ def main(max_epochs: int, device: torch.device, weighting_scheme: str = "learn_d
         avg_loss_by_class_weighted = [loss / total if total > 0 else 0 for loss, total in
                                       zip(avg_loss_by_class_weighted, total_by_class)]
 
-        diff_loss_by_class = []
-        diff_acc_by_class = []
         if debug:
             print(f"Fold {fold} Evaluation Results:")
-        for class_idx in range(10):
-
-            diff_loss = (avg_loss_by_class_weighted[class_idx] - avg_loss_by_class_baseline[class_idx])
-            diff_acc = (avg_acc_by_class_weighted[class_idx] - avg_acc_by_class_baseline[class_idx])
-
-            diff_loss_by_class.append(diff_loss)
-            diff_acc_by_class.append(diff_acc)
-            if debug:
+            for class_idx in range(10):
                 print(f"\tClass {class_idx}:")
                 print(f"\t\tBaseline - Loss: {avg_loss_by_class_baseline[class_idx]:.4f} | Acc: {avg_acc_by_class_baseline[class_idx]*100:.2f}%")
                 print(f"\t\tWeighted - Loss: {avg_loss_by_class_weighted[class_idx]:.4f} | Acc: {avg_acc_by_class_weighted[class_idx]*100:.2f}%")
-                print(f"\t\tDiff - Loss: {diff_loss :.4f} | Acc: {diff_acc * 100:.2f}%")
 
-        results.append((diff_loss_by_class, diff_acc_by_class))
+        results.append((avg_loss_by_class_baseline, avg_acc_by_class_baseline, avg_loss_by_class_weighted, avg_acc_by_class_weighted))
     return results
 
 if __name__ == "__main__":
@@ -253,13 +243,15 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using: {device}")
     epochs = 40
-    results = {}
-    results["learn_hard"] = main(epochs, device, weighting_scheme="learn_hard")
-    save_results_to_csv(results, 'results.csv')
-    results["learn_easy_inversion"] = main(epochs, device, weighting_scheme="learn_easy_inversion")
-    save_results_to_csv(results, 'results.csv')
-    results["learn_easy_linear"] = main(epochs, device, weighting_scheme="learn_easy_linear")
-    save_results_to_csv(results, 'results.csv')
+
+    results_learn_difficult = main(epochs, device, weighting_scheme="learn_difficult")
+    save_results_to_csv(results_learn_difficult, 'results_learn_difficult.csv')
+
+    results_learn_easy_inversion = main(epochs, device, weighting_scheme="learn_easy_inversion")
+    save_results_to_csv(results_learn_easy_inversion, 'results_learn_easy_inversion.csv')
+
+    results_learn_easy_linear = main(epochs, device, weighting_scheme="learn_easy_linear")
+    save_results_to_csv(results_learn_easy_linear, 'results_learn_easy_linear.csv')
 
     end = datetime.datetime.now()
     print(f"End: {end}")
